@@ -1,0 +1,40 @@
+name: Deploy to ECS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          region: us-west-2
+
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-image
+        run: |
+          IMAGE_TAG=hello-world:${{ github.sha }}
+          docker build -t $IMAGE_TAG .
+          docker tag $IMAGE_TAG ${{ steps.login-ecr.outputs.registry }}/$IMAGE_TAG
+          docker push ${{ steps.login-ecr.outputs.registry }}/$IMAGE_TAG
+
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          cluster: hello-world-cluster
+          service: hello-world-service
+          task-definition: hello-world-task
+          container-name: hello-world-container
+          container-image: ${{ steps.login-ecr.outputs.registry }}/hello-world:${{ github.sha }}
